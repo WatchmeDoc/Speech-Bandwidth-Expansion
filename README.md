@@ -17,7 +17,7 @@
 
 
 Artificial Bandwidth Expansion for Narrow-band Speech (patent by David Malah) implemented in Python, and refactored for our usages.
-This work is part of my thesis in the Department of Computer Science, University of Crete, supervised by professor Professor [Yannis Stylianou](https://www.csd.uoc.gr/CSD/index.jsp?custom=yannis_stylianou&lang=en) 
+This work is part of my thesis in the Department of Computer Science, University of Crete, supervised by Professor [Yannis Stylianou](https://www.csd.uoc.gr/CSD/index.jsp?custom=yannis_stylianou&lang=en) 
 and Dr. [George Kafentzis](https://www.csd.uoc.gr/~kafentz/).
 
 
@@ -28,13 +28,13 @@ The project uses Poetry (version >=1.2.0) for package management and Miniconda3 
 
 Create and activate a new conda environment using:
 
-```bashrc
+```sh
 $ conda create -n sbe python=3.10 -y && conda activate sbe
 ```
 
 Then, to install all required packages on your new environment use:
 
-```bashrc
+```sh
 $ poetry install
 ```
 
