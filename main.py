@@ -21,7 +21,7 @@ def fbf_sequence(filepath, window_length=30, OrderLPC=10):
 
     wl_samples = int(np.ceil(window_length * fs / 1000))
     shift = int(np.floor(wl_samples / 2))
-    window = np.hanning(wl_samples)
+    window = ss.windows.hann(wl_samples + 2, sym=True)[1:-1]
 
     Lsig = len(sig)
     sig_pos = 0
@@ -37,14 +37,15 @@ def fbf_sequence(filepath, window_length=30, OrderLPC=10):
         r: np.ndarray = r[int(len(lags) / 2):]
         a, _, _ = levinson(r=r, order=OrderLPC)
         G = np.sqrt(sum(a * r[:OrderLPC + 1].T))
-        ex = ss.filtfilt(a, 1, sigLPC)
+        ex = ss.lfilter(a, 1, sigLPC)
 
-        s = ss.filtfilt([G], a, ex)
+        s = ss.lfilter([G], a, ex)
         ens = sum(s ** 2)
         g = np.sqrt(en / ens)
         s = s * g
         s[:shift] = s[:shift] + Buffer
         synth_signal[save_pos:save_pos + shift] = s[:shift]
+        Buffer = s[shift:wl_samples]
 
         sig_pos += shift
         save_pos += shift
