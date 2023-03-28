@@ -1,1 +1,1 @@
-from sbe_encoder import SBEEncoder
+from sbe_system.SpeechBandwidthExtension.sbe import SpeechBandwidthExtension
