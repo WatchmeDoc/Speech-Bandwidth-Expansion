@@ -1,9 +1,8 @@
-import numpy as np
 import librosa
+import numpy as np
 
 
 class SpeechBandwidthExtension:
-
     def __init__(self, lpc_order=8):
         self._lpc_order = lpc_order
 
