@@ -8,7 +8,17 @@ import sounddevice as sd
 from speech_bandwidth_expansion.sbe_system.utils.features import levinson
 
 
-def fbf_sequence(filepath, window_length=30, OrderLPC=10):
+def lpc_analysis(sigLPC, OrderLPC=10):
+    r: np.ndarray = ss.correlate(sigLPC, sigLPC)
+    r: np.ndarray = r[int(len(r) / 2) :]
+    a, _, _ = levinson(r=r, order=OrderLPC)
+    G = np.sqrt(sum(a * r[: OrderLPC + 1].T))
+    ex = ss.lfilter(a, 1, sigLPC)
+
+    return ex, a, G
+
+
+def fbf_sequence(filepath, window_length=30):
     sig, fs = librosa.load(filepath, sr=16000)
 
     sd.play(sig, fs)
@@ -30,13 +40,7 @@ def fbf_sequence(filepath, window_length=30, OrderLPC=10):
         sigLPC = window * sig[sig_pos : sig_pos + wl_samples]
 
         en = sum(sigLPC**2)
-        r: np.ndarray = ss.correlate(sigLPC, sigLPC)
-        lags = ss.correlation_lags(wl_samples, wl_samples)
-        r: np.ndarray = r[int(len(lags) / 2) :]
-        a, _, _ = levinson(r=r, order=OrderLPC)
-        G = np.sqrt(sum(a * r[: OrderLPC + 1].T))
-        ex = ss.lfilter(a, 1, sigLPC)
-
+        ex, a, G = lpc_analysis(sigLPC=sigLPC)
         s = ss.lfilter([G], a, ex)
         ens = sum(s**2)
         g = np.sqrt(en / ens)
@@ -55,7 +59,7 @@ def fbf_sequence(filepath, window_length=30, OrderLPC=10):
 
 if __name__ == "__main__":
     target_sample_rate = 8000
-    filepath = "data/TIMIT_new/timit_speech_db/timit/train/dr1/fcjf0/sa1.wav"
+    filepath = "../data/GeorgeManos/stars_16k.wav"
     fbf_sequence(filepath=filepath)
     # sig, fs = librosa.load(filepath)
     # target_size = int(len(sig) * target_sample_rate / fs)
