@@ -1,9 +1,8 @@
-from time import sleep
+from typing import Tuple
 
 import librosa
 import numpy as np
 import scipy.signal as ss
-import sounddevice as sd
 from scipy.ndimage.interpolation import shift
 
 from speech_bandwidth_expansion.sbe_system.utils.features import levinson
@@ -11,20 +10,17 @@ from speech_bandwidth_expansion.sbe_system.utils.features import levinson
 
 class SpeechBandwidthExtension:
     def __init__(
-            self,
-            filepath,
-            sr: int = 8000,
-            lpc_order=8,
-            window_length=30,
-            shift_interpolation=0.25,
-            upsample_order=2,
-            cutoff_freq=3600,
+        self,
+        filepath,
+        sr: int = 8000,
+        lpc_order=8,
+        window_length=30,
+        shift_interpolation=0.25,
+        upsample_order=2,
+        cutoff_freq=3600,
     ):
         self._lpc_order = lpc_order
         self.S_nb, self.fs_nb = librosa.load(filepath, sr=sr)
-
-        sd.play(self.S_nb, self.fs_nb)
-        sleep(len(self.S_nb) / self.fs_nb + 1)
         self.window_length = window_length
         self._shift_interpolation = shift_interpolation
         self._orig_sr = sr
@@ -33,11 +29,10 @@ class SpeechBandwidthExtension:
         self._filter_order = 4
         self.fs_wb = self.fs_nb * self._upsample_order
 
-    def produce_wideband_speech(self) -> np.ndarray:
+    def produce_wideband_speech(self) -> Tuple[np.ndarray, int]:
         """
         Performs frame-by-frame analysis and applies on each frame the bandwidth expansion algorithm as described
         by David Malah.
-        :param S_nb: Input Narrowband Speech Signal Frame
         :return: Output Wideband Speech Signal
         """
         synth_signal = np.array([])
@@ -52,7 +47,7 @@ class SpeechBandwidthExtension:
         Nfr = int(np.floor((Lsig - wl_samples) / shift)) + 1
 
         for _ in range(Nfr):
-            sigLPC = window * self.S_nb[sig_pos: sig_pos + wl_samples]
+            sigLPC = window * self.S_nb[sig_pos : sig_pos + wl_samples]
 
             # en = sum(sigLPC ** 2)
             # ex, a, k, G = self._lpc_analysis(S_nb=self.S_nb)
@@ -61,13 +56,19 @@ class SpeechBandwidthExtension:
             # g = np.sqrt(en / ens)
             # s = s * g
             s_wb = self._d_malah_algorithm(S_nb=sigLPC)
-            synth_signal = np.concatenate([synth_signal, s_wb[int(len(s_wb) / 4): int(3 / 4 * len(s_wb))]])
+            synth_signal = np.concatenate(
+                [synth_signal, s_wb[int(len(s_wb) / 4) : int(3 / 4 * len(s_wb))]]
+            )
 
             sig_pos += shift
             save_pos += shift
-        sd.play(synth_signal, self.fs_wb)
-        sleep(len(synth_signal) / self.fs_wb + 1)
-        return synth_signal
+        return synth_signal, self.fs_wb
+
+    def upsample_signal(self):
+        """
+        Simply interpolates without bandwidth expansion algorithm the configured speech signal file
+        """
+        return ss.resample(self.S_nb, len(self.S_nb) * self._upsample_order)
 
     def _d_malah_algorithm(self, S_nb: np.ndarray):
         """
@@ -101,7 +102,7 @@ class SpeechBandwidthExtension:
         """
 
         r: np.ndarray = ss.correlate(S_nb, S_nb)
-        r: np.ndarray = r[int(len(r) / 2):]
+        r: np.ndarray = r[int(len(r) / 2) :]
         a, _, k = levinson(r=r, order=self._lpc_order)
         G = np.sqrt(sum(a * r[: self._lpc_order + 1].T))
         ex = ss.lfilter(a, 1, S_nb)
@@ -189,5 +190,10 @@ class SpeechBandwidthExtension:
         :param Y_wb:
         :return: High-band speech signal
         """
-        b_hp, a_hp = ss.butter(N=self._filter_order, Wn=self._fc, fs=self._orig_sr * self._upsample_order, btype='highpass')
+        b_hp, a_hp = ss.butter(
+            N=self._filter_order,
+            Wn=self._fc,
+            fs=self._orig_sr * self._upsample_order,
+            btype="highpass",
+        )
         return G_wb * ss.lfilter(b_hp, a_hp, Y_wb)
