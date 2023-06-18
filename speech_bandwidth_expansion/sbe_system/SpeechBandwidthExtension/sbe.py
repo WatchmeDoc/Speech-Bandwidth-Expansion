@@ -1,6 +1,7 @@
 from typing import Tuple
 
 import librosa
+import matplotlib.pyplot as plt
 import numpy as np
 import scipy.signal as ss
 from scipy.ndimage.interpolation import shift
@@ -17,7 +18,7 @@ class SpeechBandwidthExtension:
         window_length=30,
         shift_interpolation=0.25,
         upsample_order=2,
-        cutoff_freq=3600,
+        cutoff_freq=3900,
     ):
         self._lpc_order = lpc_order
         self.S_nb, self.fs_nb = librosa.load(filepath, sr=sr)
@@ -26,8 +27,9 @@ class SpeechBandwidthExtension:
         self._orig_sr = sr
         self._upsample_order = upsample_order
         self._fc = cutoff_freq
-        self._filter_order = 4
-        self.fs_wb = self.fs_nb * self._upsample_order
+        self._filter_order = 16
+        self.fs_wb: int = int(self.fs_nb * self._upsample_order)
+        self._delta = 0.01
 
     def produce_wideband_speech(self) -> Tuple[np.ndarray, int]:
         """
@@ -43,34 +45,47 @@ class SpeechBandwidthExtension:
 
         Lsig = len(self.S_nb)
         sig_pos = 0
-        save_pos = 0
         Nfr = int(np.floor((Lsig - wl_samples) / shift)) + 1
 
         for _ in range(Nfr):
-            sigLPC = window * self.S_nb[sig_pos : sig_pos + wl_samples]
-
-            # en = sum(sigLPC ** 2)
-            # ex, a, k, G = self._lpc_analysis(S_nb=self.S_nb)
-            # s = ss.lfilter([G], a, ex)
-            # ens = sum(s ** 2)
-            # g = np.sqrt(en / ens)
-            # s = s * g
+            sigslice = self.S_nb[sig_pos : sig_pos + wl_samples]
+            coef = 0.97
+            sig_preemph = librosa.effects.preemphasis(sigslice, coef=coef)
+            sigLPC = window * sig_preemph
             s_wb = self._d_malah_algorithm(S_nb=sigLPC)
             synth_signal = np.concatenate(
                 [synth_signal, s_wb[int(len(s_wb) / 4) : int(3 / 4 * len(s_wb))]]
             )
 
             sig_pos += shift
-            save_pos += shift
         return synth_signal, self.fs_wb
 
     def upsample_signal(self):
         """
         Simply interpolates without bandwidth expansion algorithm the configured speech signal file
         """
-        return ss.resample(self.S_nb, len(self.S_nb) * self._upsample_order)
+        return self._signal_interpolation(S_nb=self.S_nb), self.fs_wb
 
-    def _d_malah_algorithm(self, S_nb: np.ndarray):
+    def plot_spectrogram(self, sig, fs, title=None):
+        t_wb = np.arange(start=0, stop=len(sig)) / fs
+        # Plot the signal
+        plt.figure()
+        plt.subplot(211)
+        plt.plot(t_wb, sig)
+        plt.xlabel("Time (s)")
+        plt.ylabel("Amplitude")
+        plt.title(title)
+
+        # Plot the spectrogram
+        plt.subplot(212)
+        plt.specgram(sig, Fs=fs)
+        plt.xlabel("Time (s)")
+        plt.ylabel("Frequency")
+
+        plt.tight_layout()
+        plt.show()
+
+    def _d_malah_algorithm(self, S_nb: np.ndarray) -> np.ndarray:
         """
         Applies Speech Bandwidth Extension as described on the patent to the input narrowband speech signal.
         :param S_nb: Input Narrowband Speech Signal Frame
@@ -79,7 +94,7 @@ class SpeechBandwidthExtension:
 
         ex, a_nb, k_nb, G = self._lpc_analysis(S_nb=S_nb)
         r_nb = -k_nb
-        A_nb = self._area_coeff_computation(k_nb=r_nb)
+        A_nb = self._area_coeff_computation(r_nb=r_nb)
         A_wb = self._area_shifted_interpolation(A_nb=A_nb)
 
         S_tilde = self._signal_interpolation(S_nb=S_nb)
@@ -103,19 +118,20 @@ class SpeechBandwidthExtension:
 
         r: np.ndarray = ss.correlate(S_nb, S_nb)
         r: np.ndarray = r[int(len(r) / 2) :]
+        r[0] += 1 + self._delta
         a, _, k = levinson(r=r, order=self._lpc_order)
         G = np.sqrt(sum(a * r[: self._lpc_order + 1].T))
         ex = ss.lfilter(a, 1, S_nb)
 
         return ex, a, k, G
 
-    def _area_coeff_computation(self, k_nb):
+    def _area_coeff_computation(self, r_nb):
         """
         Computes area coefficients from the Linear Prediction Coefficients
-        :param a_nb: Input Narrowband speech linear prediction coefficients
-        :return: Narrowband Area Coefficients A_nb
+        :param r_nb: Input Narrowband speech parcors
+        :return: Narrowband Log-Area Coefficients A_nb
         """
-        return np.log((1 - k_nb) / (1 + k_nb))
+        return np.log((1 - r_nb) / (1 + r_nb))
 
     def _area_shifted_interpolation(self, A_nb):
         """
@@ -144,7 +160,7 @@ class SpeechBandwidthExtension:
     def _area_coeff_to_lpc(self, A_wb):
         """
         Computes LPC parameters from Area coefficients
-        :param A_wb: Interpolated Area Coefficients
+        :param A_wb: Interpolated Log-Area Coefficients
         :return: Wideband LPC parameters
         """
         N = len(A_wb)
