@@ -27,7 +27,7 @@ class SpeechBandwidthExtension:
         self._orig_sr = sr
         self._upsample_order = upsample_order
         self._fc = cutoff_freq
-        self._filter_order = 16
+        self._filter_order = 12
         self.fs_wb: int = int(self.fs_nb * self._upsample_order)
         self._delta = 0.01
 
@@ -66,30 +66,12 @@ class SpeechBandwidthExtension:
         """
         return self._signal_interpolation(S_nb=self.S_nb), self.fs_wb
 
-    def plot_spectrogram(self, sig, fs, title=None):
-        t_wb = np.arange(start=0, stop=len(sig)) / fs
-        # Plot the signal
-        plt.figure()
-        plt.subplot(211)
-        plt.plot(t_wb, sig)
-        plt.xlabel("Time (s)")
-        plt.ylabel("Amplitude")
-        plt.title(title)
-
-        # Plot the spectrogram
-        plt.subplot(212)
-        plt.specgram(sig, Fs=fs)
-        plt.xlabel("Time (s)")
-        plt.ylabel("Frequency")
-
-        plt.tight_layout()
-        plt.show()
 
     def _d_malah_algorithm(self, S_nb: np.ndarray) -> np.ndarray:
         """
         Applies Speech Bandwidth Extension as described on the patent to the input narrowband speech signal.
         :param S_nb: Input Narrowband Speech Signal Frame
-        :return: Output Wideband Speech Signal
+        :return: Output Wideband Speech Signal Frame
         """
 
         ex, a_nb, k_nb, G = self._lpc_analysis(S_nb=S_nb)
@@ -113,7 +95,7 @@ class SpeechBandwidthExtension:
         """
         Applies LPC analysis to the input Speech Signal
         :param S_nb: Input Narrowband Speech Signal
-        :return: Narrowband Speech Linear Prediction Coefficients a_nb
+        :return: ex, a, k, G: excitation signal ex, LPC Coefficients a, reflection coefficients k, gain G
         """
 
         r: np.ndarray = ss.correlate(S_nb, S_nb)
@@ -128,7 +110,7 @@ class SpeechBandwidthExtension:
     def _area_coeff_computation(self, r_nb):
         """
         Computes area coefficients from the Linear Prediction Coefficients
-        :param r_nb: Input Narrowband speech parcors
+        :param r_nb: Input Narrowband speech partial correlation coefficients (parcors)
         :return: Narrowband Log-Area Coefficients A_nb
         """
         return np.log((1 - r_nb) / (1 + r_nb))
@@ -143,7 +125,7 @@ class SpeechBandwidthExtension:
 
     def _signal_interpolation(self, S_nb):
         """
-        Interpolates the input narrowband speech signal
+        Upsamples the input narrowband speech signal
         :param S_nb: Input Narrowband Speech Signal
         :return: Interpolated Narrowband Speech Signal
         """
@@ -159,7 +141,7 @@ class SpeechBandwidthExtension:
 
     def _area_coeff_to_lpc(self, A_wb):
         """
-        Computes LPC parameters from Area coefficients
+        Computes LPC parameters from Log-Area coefficients
         :param A_wb: Interpolated Log-Area Coefficients
         :return: Wideband LPC parameters
         """
@@ -202,14 +184,13 @@ class SpeechBandwidthExtension:
 
     def _hpf_and_gain(self, Y_wb, G_wb):
         """
-        Applies High-Pass filter and computes Gain to the input wideband speech signal
-        :param Y_wb:
+        Applies High-Pass butterworth filter and multiplied by Gain value to the input wideband speech signal
+        :param Y_wb: Wideband generated Speech Signal Frame
+        :param G_wb: Gain resulted from LPC Analysis
         :return: High-band speech signal
         """
-        b_hp, a_hp = ss.butter(
-            N=self._filter_order,
-            Wn=self._fc,
-            fs=self._orig_sr * self._upsample_order,
-            btype="highpass",
-        )
-        return G_wb * ss.lfilter(b_hp, a_hp, Y_wb)
+
+        nyq = 0.5 * self.fs_wb
+        normal_cutoff = self._fc / nyq
+        b, a = ss.butter(self._filter_order, normal_cutoff, btype='high', analog=False)
+        return G_wb * ss.filtfilt(b, a, Y_wb)
