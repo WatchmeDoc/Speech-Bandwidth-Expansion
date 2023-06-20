@@ -66,7 +66,6 @@ class SpeechBandwidthExtension:
         """
         return self._signal_interpolation(S_nb=self.S_nb), self.fs_wb
 
-
     def _d_malah_algorithm(self, S_nb: np.ndarray) -> np.ndarray:
         """
         Applies Speech Bandwidth Extension as described on the patent to the input narrowband speech signal.
@@ -192,5 +191,5 @@ class SpeechBandwidthExtension:
 
         nyq = 0.5 * self.fs_wb
         normal_cutoff = self._fc / nyq
-        b, a = ss.butter(self._filter_order, normal_cutoff, btype='high', analog=False)
+        b, a = ss.butter(self._filter_order, normal_cutoff, btype="high", analog=False)
         return G_wb * ss.filtfilt(b, a, Y_wb)
