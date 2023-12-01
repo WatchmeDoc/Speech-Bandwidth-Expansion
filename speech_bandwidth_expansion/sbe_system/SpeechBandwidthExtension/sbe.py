@@ -52,9 +52,7 @@ class SpeechBandwidthExtension:
 
         for _ in range(Nfr):
             sigslice = self.S_nb[sig_pos : sig_pos + wl_samples]
-            coef = 0.97
-            sig_preemph = librosa.effects.preemphasis(sigslice, coef=coef)
-            sigLPC = window * sig_preemph
+            sigLPC = window * sigslice
             s_wb = self._d_malah_algorithm(S_nb=sigLPC)
 
             # synth_signal = np.concatenate(
