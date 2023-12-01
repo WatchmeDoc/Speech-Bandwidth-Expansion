@@ -37,15 +37,18 @@ class SpeechBandwidthExtension:
         by David Malah.
         :return: Output Wideband Speech Signal
         """
-        synth_signal = np.array([])
+        synth_signal = np.zeros(len(self.S_nb) * self._upsample_order)
 
         wl_samples = int(np.ceil(self.window_length * self.fs_nb / 1000))
         shift = int(np.floor(wl_samples / 2))
         window = ss.windows.hann(wl_samples + 2, sym=True)[1:-1]
+        Buffer = 0
 
         Lsig = len(self.S_nb)
         sig_pos = 0
+        save_pos = 0
         Nfr = int(np.floor((Lsig - wl_samples) / shift)) + 1
+        wb_shift = shift * self._upsample_order
 
         for _ in range(Nfr):
             sigslice = self.S_nb[sig_pos : sig_pos + wl_samples]
@@ -53,11 +56,17 @@ class SpeechBandwidthExtension:
             sig_preemph = librosa.effects.preemphasis(sigslice, coef=coef)
             sigLPC = window * sig_preemph
             s_wb = self._d_malah_algorithm(S_nb=sigLPC)
-            synth_signal = np.concatenate(
-                [synth_signal, s_wb[int(len(s_wb) / 4) : int(3 / 4 * len(s_wb))]]
-            )
 
+            # synth_signal = np.concatenate(
+            #     [synth_signal, s_wb[int(len(s_wb) / 4) : int(3 / 4 * len(s_wb))]]
+            # )
+
+            # Overlap Add
+            s_wb[:wb_shift] = s_wb[:wb_shift] + Buffer
+            synth_signal[save_pos:save_pos + wb_shift] = s_wb[:wb_shift]
+            Buffer = s_wb[wb_shift:wb_shift + wl_samples]
             sig_pos += shift
+            save_pos += wb_shift
         return synth_signal, self.fs_wb
 
     def upsample_signal(self):
