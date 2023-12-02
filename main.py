@@ -17,6 +17,6 @@ if __name__ == "__main__":
     S_nb, fs_nb = sbe.S_nb, sbe.fs_nb
     sig_interp, fs_interp = sbe.upsample_signal()
 
-    # sd.play(sig, fs)
-    sf.write(str(f'output_speechfiles/{file}/sbe.wav'), sig, fs)
+    sd.play(sig, fs)
+    sf.write(str(f'output_speechfiles/{file}/sbe1.wav'), sig, fs)
     sleep(len(sig) / fs + 1)

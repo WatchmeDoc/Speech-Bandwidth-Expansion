@@ -14,12 +14,28 @@ class SpeechBandwidthExtension:
         self,
         filepath,
         sr: int = 8000,
-        lpc_order=8,
-        window_length=30,
-        shift_interpolation=0.25,
         upsample_order=2,
-        cutoff_freq=3900,
+        window_length=80,
+        lpc_order=80,
+        shift_interpolation=0.1,
+        corr_delta=0.01,
+        cutoff_freq=3800,
+        filter_order=20,
+        preemphasis_coefficient=0.97
     ):
+        """
+        Speech Bandwidth Expansion System as described by the patent of David Malah
+        :param filepath: Path to the input narrowband speech signal
+        :param sr: Sampling Rate of the input narrowband speech signal
+        :param upsample_order: Upsampling factor
+        :param lpc_order: Linear Prediction Coefficients Order
+        :param window_length: Window Length in ms
+        :param shift_interpolation: Shift interpolation factor
+        :param corr_delta: Correlation Delta
+        :param cutoff_freq: High-Pass Filter Cutoff Frequency
+        :param filter_order: High-Pass Filter Order
+        :param preemphasis_coefficient: Preemphasis Coefficient
+        """
         self._lpc_order = lpc_order
         self.S_nb, self.fs_nb = librosa.load(filepath, sr=sr)
         self.window_length = window_length
@@ -27,9 +43,10 @@ class SpeechBandwidthExtension:
         self._orig_sr = sr
         self._upsample_order = upsample_order
         self._fc = cutoff_freq
-        self._filter_order = 12
+        self._filter_order = filter_order
         self.fs_wb: int = int(self.fs_nb * self._upsample_order)
-        self._delta = 0.01
+        self._delta = corr_delta
+        self._preemph_coeff = preemphasis_coefficient
 
     def produce_wideband_speech(self) -> Tuple[np.ndarray, int]:
         """
@@ -79,8 +96,8 @@ class SpeechBandwidthExtension:
         :param S_nb: Input Narrowband Speech Signal Frame
         :return: Output Wideband Speech Signal Frame
         """
-
-        ex, a_nb, k_nb, G = self._lpc_analysis(S_nb=S_nb)
+        sig_preemph = librosa.effects.preemphasis(S_nb, coef=self._preemph_coeff)
+        ex, a_nb, k_nb, G = self._lpc_analysis(S_nb=sig_preemph)
         r_nb = -k_nb
         A_nb = self._area_coeff_computation(r_nb=r_nb)
         A_wb = self._area_shifted_interpolation(A_nb=A_nb)
