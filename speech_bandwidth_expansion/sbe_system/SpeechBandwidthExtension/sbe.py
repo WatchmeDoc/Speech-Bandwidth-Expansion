@@ -15,13 +15,13 @@ class SpeechBandwidthExtension:
         filepath,
         sr: int = 8000,
         upsample_order=2,
-        window_length=80,
-        lpc_order=80,
-        shift_interpolation=0.1,
+        window_length=60,
+        lpc_order=16,
+        shift_interpolation=0.25,
         corr_delta=0.01,
-        cutoff_freq=3800,
+        cutoff_freq=3900,
         filter_order=20,
-        preemphasis_coefficient=0.97
+        preemphasis_coefficient=0.67,
     ):
         """
         Speech Bandwidth Expansion System as described by the patent of David Malah
@@ -72,14 +72,10 @@ class SpeechBandwidthExtension:
             sigLPC = window * sigslice
             s_wb = self._d_malah_algorithm(S_nb=sigLPC)
 
-            # synth_signal = np.concatenate(
-            #     [synth_signal, s_wb[int(len(s_wb) / 4) : int(3 / 4 * len(s_wb))]]
-            # )
-
             # Overlap Add
             s_wb[:wb_shift] = s_wb[:wb_shift] + Buffer
-            synth_signal[save_pos:save_pos + wb_shift] = s_wb[:wb_shift]
-            Buffer = s_wb[wb_shift:wb_shift + wl_samples]
+            synth_signal[save_pos : save_pos + wb_shift] = s_wb[:wb_shift]
+            Buffer = s_wb[wb_shift : wb_shift + wl_samples]
             sig_pos += shift
             save_pos += wb_shift
         return synth_signal, self.fs_wb

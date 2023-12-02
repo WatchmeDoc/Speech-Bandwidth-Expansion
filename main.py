@@ -144,7 +144,7 @@ if __name__ == "__main__":
         if not os.path.exists(speech_directory):
             os.makedirs(speech_directory)
         # Speech Bandwidth Expansion
-        sbe = SpeechBandwidthExtension(filepath, window_length=80)
+        sbe = SpeechBandwidthExtension(filepath)
         sig, fs = sbe.produce_wideband_speech()
         S_wb, fs_wb = librosa.load(filepath, sr=16000)
         S_nb, fs_nb = sbe.S_nb, sbe.fs_nb
