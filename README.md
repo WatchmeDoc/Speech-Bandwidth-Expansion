@@ -3,10 +3,13 @@
 <div align="center">
     <header><h1>System for bandwidth extension of narrow-band speech</h1></header>
     <a href="#">
-        <img src="https://img.shields.io/badge/Python-3.10-1cb855">
+    <img src="https://img.shields.io/badge/Python-3.10-306998">
     </a>
     <a href="#">
-        <img src="https://img.shields.io/badge/License-MIT-8a0023">
+        <img src="https://img.shields.io/badge/Conda-4.12.0-44903d">
+    </a>
+    <a href="#">
+        <img src="https://img.shields.io/badge/Poetry-1.2.2-5119d4">
     </a>
     <br>
     <a href="https://patents.google.com/patent/US7216074"><strong>Explore Patent in Google Patents »</strong></a>
