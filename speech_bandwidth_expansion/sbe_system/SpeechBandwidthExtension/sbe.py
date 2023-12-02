@@ -15,13 +15,13 @@ class SpeechBandwidthExtension:
         filepath,
         sr: int = 8000,
         upsample_order=2,
-        window_length=80,
-        lpc_order=80,
-        shift_interpolation=0.1,
+        window_length=60,
+        lpc_order=16,
+        shift_interpolation=0.25,
         corr_delta=0.01,
-        cutoff_freq=3800,
+        cutoff_freq=3900,
         filter_order=20,
-        preemphasis_coefficient=0.97
+        preemphasis_coefficient=0.67,
     ):
         """
         Speech Bandwidth Expansion System as described by the patent of David Malah
@@ -34,10 +34,12 @@ class SpeechBandwidthExtension:
         :param corr_delta: Correlation Delta
         :param cutoff_freq: High-Pass Filter Cutoff Frequency
         :param filter_order: High-Pass Filter Order
-        :param preemphasis_coefficient: Preemphasis Coefficient
+        :param preemphasis_coefficient: Preemphasis Coefficient prior to LPC Analysis
         """
         self._lpc_order = lpc_order
+        self._file = filepath.split("/")[-1].split(".")[0]
         self.S_nb, self.fs_nb = librosa.load(filepath, sr=sr)
+        self.S_wb, self.fs_wb = librosa.load(filepath, sr=sr * upsample_order)
         self.window_length = window_length
         self._shift_interpolation = shift_interpolation
         self._orig_sr = sr
@@ -47,8 +49,11 @@ class SpeechBandwidthExtension:
         self.fs_wb: int = int(self.fs_nb * self._upsample_order)
         self._delta = corr_delta
         self._preemph_coeff = preemphasis_coefficient
+        self._debug_frames_low = []
+        self._debug_frames_mid = []
+        self._debug_frames_high = []
 
-    def produce_wideband_speech(self) -> Tuple[np.ndarray, int]:
+    def produce_wideband_speech(self) -> Tuple[np.ndarray, float]:
         """
         Performs frame-by-frame analysis and applies on each frame the bandwidth expansion algorithm as described
         by David Malah.
@@ -67,21 +72,91 @@ class SpeechBandwidthExtension:
         Nfr = int(np.floor((Lsig - wl_samples) / shift)) + 1
         wb_shift = shift * self._upsample_order
 
-        for _ in range(Nfr):
+        for i in range(Nfr):
+            self._curr_frame = i
             sigslice = self.S_nb[sig_pos : sig_pos + wl_samples]
             sigLPC = window * sigslice
             s_wb = self._d_malah_algorithm(S_nb=sigLPC)
 
+            # read ground truth corresponding frame
+            sigslice = self.S_wb[2 * sig_pos : 2 * sig_pos + 2 * wl_samples]
+            sigWB = ss.windows.hann(2 * wl_samples + 2, sym=True)[1:-1] * sigslice
+            sigGT_fft = np.log(np.abs(np.fft.fft(sigWB, n=2048)[:1024]))
+
+            if i == 11:
+                plt.figure()
+                plt.plot(
+                    np.linspace(0, 8000, num=1024),
+                    np.log(np.abs(np.fft.fft(s_wb, n=2048)[:1024])),
+                    label="Patent",
+                )
+                plt.plot(
+                    np.linspace(0, 8000, num=1024),
+                    np.log(np.abs(np.fft.fft(sigWB, n=2048)[:1024])),
+                    label="Ground Truth",
+                )
+                plt.xlabel("Frequency (Hz)")
+                plt.ylabel("Log Magnitude (db)")
+                plt.title("SigSBE vs SigTrue")
+                plt.legend()
+                plt.tight_layout()
+                plt.savefig(f"plots/" + self._file + "/frame_log_magn.png")
+                plt.show()
+
+            sigDM_fft = np.log(np.abs(np.fft.fft(s_wb, n=2048)[:1024]))
+            indx_low = int(3000 / (self.fs_wb / 2) * 1024)
+            indx_mid = int(5000 / (self.fs_wb / 2) * 1024)
+            indx_high = int(8000 / (self.fs_wb / 2) * 1024)
+            self._debug_frames_low.append(
+                np.mean(np.abs(sigDM_fft[:indx_low] - sigGT_fft[:indx_low]))
+            )
+            self._debug_frames_mid.append(
+                np.mean(
+                    np.abs(sigDM_fft[indx_low:indx_mid] - sigGT_fft[indx_low:indx_mid])
+                )
+            )
+            self._debug_frames_high.append(
+                np.mean(
+                    np.abs(
+                        sigDM_fft[indx_mid:indx_high] - sigGT_fft[indx_mid:indx_high]
+                    )
+                )
+            )
+            # Overlap Add
+            s_wb[:wb_shift] = s_wb[:wb_shift] + Buffer
+            synth_signal[save_pos : save_pos + wb_shift] = s_wb[:wb_shift]
+            Buffer = s_wb[wb_shift : wb_shift + wl_samples]
+
+            sig_pos += shift
+            save_pos += wb_shift
+
             # synth_signal = np.concatenate(
             #     [synth_signal, s_wb[int(len(s_wb) / 4) : int(3 / 4 * len(s_wb))]]
             # )
+            #
+            # sig_pos += shift
+        plt.figure()
 
-            # Overlap Add
-            s_wb[:wb_shift] = s_wb[:wb_shift] + Buffer
-            synth_signal[save_pos:save_pos + wb_shift] = s_wb[:wb_shift]
-            Buffer = s_wb[wb_shift:wb_shift + wl_samples]
-            sig_pos += shift
-            save_pos += wb_shift
+        plt.subplot(3, 1, 1)
+        plt.hist(self._debug_frames_low, bins=100)
+        plt.xlabel("Abs difference between patent and ground truth log FFT magnitudes")
+        plt.ylabel("Number of frames")
+        plt.title("0-3000Hz")
+
+        plt.subplot(3, 1, 2)
+        plt.hist(self._debug_frames_mid, bins=100)
+        plt.xlabel("Abs difference between patent and ground truth log FFT magnitudes")
+        plt.ylabel("Number of frames")
+        plt.title("3000-5000Hz")
+
+        plt.subplot(3, 1, 3)
+        plt.hist(self._debug_frames_high, bins=100)
+        plt.xlabel("Abs difference between patent and ground truth log FFT magnitudes")
+        plt.ylabel("Number of frames")
+        plt.title("5000-8000Hz")
+        plt.tight_layout()
+        plt.savefig(f"plots/" + self._file + "/mean_abs_diff_histograms.png")
+        plt.show()
         return synth_signal, self.fs_wb
 
     def upsample_signal(self):
@@ -112,6 +187,35 @@ class SpeechBandwidthExtension:
         S_hb = self._hpf_and_gain(Y_wb=Y_wb, G_wb=G)
 
         S_wb = S_hb + S_tilde
+        if self._curr_frame == 11:
+            plt.figure()
+            plt.subplot(4, 1, 1)
+            plt.plot(
+                np.linspace(0, 8000, num=1024),
+                (np.abs(np.fft.fft(Y_wb, n=2048)[:1024])),
+            )
+            plt.title("LPC OUTPUT")
+            plt.subplot(4, 1, 2)
+            plt.plot(
+                np.linspace(0, 8000, num=1024),
+                (np.abs(np.fft.fft(S_hb, n=2048)[:1024])),
+            )
+            plt.title("Sig Highband")
+            plt.subplot(4, 1, 3)
+            plt.plot(
+                np.linspace(0, 8000, num=1024),
+                (np.abs(np.fft.fft(S_tilde, n=2048)[:1024])),
+            )
+            plt.title("Sig Interpolated")
+            plt.subplot(4, 1, 4)
+            plt.plot(
+                np.linspace(0, 8000, num=1024),
+                (np.abs(np.fft.fft(S_wb, n=2048)[:1024])),
+            )
+            plt.title("Reconstructed Wideband")
+            plt.tight_layout()
+            plt.savefig(f"plots/" + self._file + "/signal_build_magnitude.png")
+            plt.show()
         return S_wb
 
     def _lpc_analysis(self, S_nb: np.ndarray):
