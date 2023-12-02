@@ -1,12 +1,11 @@
 from typing import Tuple
 
 import librosa
-import matplotlib.pyplot as plt
 import numpy as np
 import scipy.signal as ss
 from scipy.ndimage.interpolation import shift
 
-from speech_bandwidth_expansion.sbe_system.utils.features import levinson
+from speech_bandwidth_expansion.utils.features import levinson
 
 
 class SpeechBandwidthExtension:

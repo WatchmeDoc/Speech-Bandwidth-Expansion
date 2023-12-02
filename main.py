@@ -8,8 +8,7 @@ import scipy.signal as ss
 import sounddevice as sd
 import soundfile as sf
 
-from speech_bandwidth_expansion.sbe_system.SpeechBandwidthExtension.sbe import \
-    SpeechBandwidthExtension
+from speech_bandwidth_expansion import SpeechBandwidthExtension
 
 
 def stft_mag(sig, fs):
