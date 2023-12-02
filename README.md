@@ -21,7 +21,7 @@ Artificial Bandwidth Expansion for Narrow-band Speech (patent by David Malah) im
 This work is part of my thesis in the Department of Computer Science, University of Crete, supervised by Professor [Yannis Stylianou](https://www.csd.uoc.gr/CSD/index.jsp?custom=yannis_stylianou&lang=en) 
 and Dr. [George Kafentzis](https://www.csd.uoc.gr/~kafentz/). Make sure to also see the results [project report](Artificial_Bandwidth_Expansion.pdf).
 
-The experiments were carried out and produced by the jupyter notebook in [notebooks](notebooks/spectrograms.ipynb). You can listen
+The experiments were carried out and produced by the [main.py](main.py) script. You can listen
 to the system's output speech files in [output_speechfiles](output_speechfiles).
 
 
